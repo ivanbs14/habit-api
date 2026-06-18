@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String           @id @default(cuid())
+  name           String
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  routines       Routine[]
+  routineCheckins RoutineCheckin[]
+  pet            Pet?
+}
+
+model Pet {
+  id         String     @id @default(cuid())
+  name       String
+  mood       String
+  happiness  Int
+  userId     String     @unique
+  user       User       @relation(fields: [userId], references: [id])
+  petEvents  PetEvent[]
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+model Routine {
+  id         String           @id @default(cuid())
+  name       String
+  isActive   Boolean          @default(true)
+  userId     String
+  user       User             @relation(fields: [userId], references: [id])
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  checkins   RoutineCheckin[]
+}
+
+model RoutineCheckin {
+  id         String   @id @default(cuid())
+  routineId  String
+  userId     String
+  status     String
+  createdAt  DateTime @default(now())
+  routine    Routine  @relation(fields: [routineId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+}
+
+model PetEvent {
+  id         String   @id @default(cuid())
+  petId      String
+  type       String
+  payloadJson String
+  createdAt  DateTime @default(now())
+  pet        Pet      @relation(fields: [petId], references: [id])
+}
