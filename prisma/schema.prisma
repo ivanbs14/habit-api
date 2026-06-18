@@ -32,6 +32,10 @@ model Pet {
 model Routine {
   id         String           @id @default(cuid())
   name       String
+  description String
+  question   String
+  scheduledTime String
+  frequency  String
   isActive   Boolean          @default(true)
   userId     String
   user       User             @relation(fields: [userId], references: [id])

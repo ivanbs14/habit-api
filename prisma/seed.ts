@@ -31,10 +31,42 @@ async function main() {
 
   await prisma.routine.createMany({
     data: [
-      { id: 'routine_001', name: 'Drink water', userId },
-      { id: 'routine_002', name: 'Study English', userId },
-      { id: 'routine_003', name: 'Read the Bible', userId },
-      { id: 'routine_004', name: 'Workout', userId },
+      {
+        id: 'routine_001',
+        name: 'Drink water',
+        description: 'Remember to drink water',
+        question: 'Did you drink water?',
+        scheduledTime: '08:00',
+        frequency: 'daily',
+        userId,
+      },
+      {
+        id: 'routine_002',
+        name: 'Study English',
+        description: 'Practice English',
+        question: 'Did you study English today?',
+        scheduledTime: '20:00',
+        frequency: 'daily',
+        userId,
+      },
+      {
+        id: 'routine_003',
+        name: 'Read the Bible',
+        description: 'Bible reading time',
+        question: 'Did you read the Bible today?',
+        scheduledTime: '21:00',
+        frequency: 'daily',
+        userId,
+      },
+      {
+        id: 'routine_004',
+        name: 'Workout',
+        description: 'Training routine',
+        question: 'Did you train today?',
+        scheduledTime: '18:00',
+        frequency: 'daily',
+        userId,
+      },
     ],
   });
 }

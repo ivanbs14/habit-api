@@ -1,10 +1,16 @@
+import { DeviceStateService } from '../device/device-state.service';
 import { PrismaService } from '../../prisma.service';
 export declare class RoutinesController {
     private readonly prisma;
-    constructor(prisma: PrismaService);
+    private readonly deviceStateService;
+    constructor(prisma: PrismaService, deviceStateService: DeviceStateService);
     findAll(): Promise<{
-        id: string;
         name: string;
+        id: string;
+        description: string;
+        question: string;
+        scheduledTime: string;
+        frequency: string;
         isActive: boolean;
         userId: string;
         createdAt: Date;
@@ -14,10 +20,11 @@ export declare class RoutinesController {
         routine: {
             id: string;
             name: string;
+            description: string;
+            question: string;
+            scheduledTime: string;
+            frequency: string;
             isActive: boolean;
-            userId: string;
-            createdAt: Date;
-            updatedAt: Date;
         } | null;
         message: string;
     }>;

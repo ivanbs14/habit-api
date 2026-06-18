@@ -9,6 +9,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const health_controller_1 = require("./modules/health/health.controller");
+const device_controller_1 = require("./modules/device/device.controller");
+const device_state_service_1 = require("./modules/device/device-state.service");
 const pet_controller_1 = require("./modules/pet/pet.controller");
 const prisma_service_1 = require("./prisma.service");
 const routine_checkins_controller_1 = require("./modules/routine-checkins/routine-checkins.controller");
@@ -19,12 +21,13 @@ exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
         controllers: [
+            device_controller_1.DeviceController,
             health_controller_1.HealthController,
             pet_controller_1.PetController,
             routine_checkins_controller_1.RoutineCheckinsController,
             routines_controller_1.RoutinesController,
         ],
-        providers: [prisma_service_1.PrismaService],
+        providers: [device_state_service_1.DeviceStateService, prisma_service_1.PrismaService],
     })
 ], AppModule);
 //# sourceMappingURL=app.module.js.map

@@ -1,11 +1,15 @@
 import { BadRequestException, Body, Controller, Post } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import { CreateRoutineCheckinDto } from './create-routine-checkin.dto';
+import { DeviceStateService } from '../device/device-state.service';
 import { RoutineCheckinStatus } from './routine-checkin-status.enum';
 
 @Controller('routine-checkins')
 export class RoutineCheckinsController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly deviceStateService: DeviceStateService,
+  ) {}
 
   @Post()
   async create(@Body() body: CreateRoutineCheckinDto) {
@@ -52,14 +56,16 @@ export class RoutineCheckinsController {
       },
     });
 
+    const deviceState = await this.deviceStateService.getDeviceState();
+
     return {
       checkin,
-      pet: {
-        name: updatedPet.name,
-        mood: updatedPet.mood,
-        happiness: updatedPet.happiness,
-      },
+      pet: deviceState.pet,
       message,
+      dueNow: deviceState.dueNow,
+      routine: deviceState.routine,
+      nextCheckAt: deviceState.nextCheckAt,
+      nextPollInSeconds: deviceState.nextPollInSeconds,
     };
   }
 
@@ -74,8 +80,9 @@ export class RoutineCheckinsController {
       case RoutineCheckinStatus.NOT_DONE:
         return { mood: 'sad', delta: -5, message: 'No worries, let us try again soon.' };
       case RoutineCheckinStatus.POSTPONED:
+        return { mood: 'sad', delta: -5, message: 'Okay, postponed for now. We will try again tomorrow.' };
       default:
-        return { mood: 'normal', delta: -1, message: 'Okay, postponed for later.' };
+        return { mood: 'sad', delta: -5, message: 'No worries, let us try again soon.' };
     }
   }
 }

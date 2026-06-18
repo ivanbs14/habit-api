@@ -11,10 +11,12 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RoutinesController = void 0;
 const common_1 = require("@nestjs/common");
+const device_state_service_1 = require("../device/device-state.service");
 const prisma_service_1 = require("../../prisma.service");
 let RoutinesController = class RoutinesController {
-    constructor(prisma) {
+    constructor(prisma, deviceStateService) {
         this.prisma = prisma;
+        this.deviceStateService = deviceStateService;
     }
     async findAll() {
         return this.prisma.routine.findMany({
@@ -25,10 +27,7 @@ let RoutinesController = class RoutinesController {
     async current() {
         const startedAt = Date.now();
         console.log('[routines] GET /routines/current enter');
-        const routine = await this.prisma.routine.findFirst({
-            where: { userId: 'user_fixed_001' },
-            orderBy: { createdAt: 'asc' },
-        });
+        const routine = await this.deviceStateService.getCurrentDueRoutine();
         console.log(`[routines] GET /routines/current exit found=${Boolean(routine)} ${Date.now() - startedAt}ms`);
         return {
             routine,
@@ -51,6 +50,7 @@ __decorate([
 ], RoutinesController.prototype, "current", null);
 exports.RoutinesController = RoutinesController = __decorate([
     (0, common_1.Controller)('routines'),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        device_state_service_1.DeviceStateService])
 ], RoutinesController);
 //# sourceMappingURL=routines.controller.js.map

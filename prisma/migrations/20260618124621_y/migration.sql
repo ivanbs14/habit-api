@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "Routine" ALTER COLUMN "description" DROP DEFAULT,
+ALTER COLUMN "frequency" DROP DEFAULT,
+ALTER COLUMN "question" DROP DEFAULT,
+ALTER COLUMN "scheduledTime" DROP DEFAULT;

@@ -16,10 +16,12 @@ exports.RoutineCheckinsController = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../prisma.service");
 const create_routine_checkin_dto_1 = require("./create-routine-checkin.dto");
+const device_state_service_1 = require("../device/device-state.service");
 const routine_checkin_status_enum_1 = require("./routine-checkin-status.enum");
 let RoutineCheckinsController = class RoutineCheckinsController {
-    constructor(prisma) {
+    constructor(prisma, deviceStateService) {
         this.prisma = prisma;
+        this.deviceStateService = deviceStateService;
     }
     async create(body) {
         const routine = await this.prisma.routine.findUnique({ where: { id: body.routineId } });
@@ -60,14 +62,15 @@ let RoutineCheckinsController = class RoutineCheckinsController {
                 }),
             },
         });
+        const deviceState = await this.deviceStateService.getDeviceState();
         return {
             checkin,
-            pet: {
-                name: updatedPet.name,
-                mood: updatedPet.mood,
-                happiness: updatedPet.happiness,
-            },
+            pet: deviceState.pet,
             message,
+            dueNow: deviceState.dueNow,
+            routine: deviceState.routine,
+            nextCheckAt: deviceState.nextCheckAt,
+            nextPollInSeconds: deviceState.nextPollInSeconds,
         };
     }
     resolveMoodRule(status) {
@@ -77,8 +80,9 @@ let RoutineCheckinsController = class RoutineCheckinsController {
             case routine_checkin_status_enum_1.RoutineCheckinStatus.NOT_DONE:
                 return { mood: 'sad', delta: -5, message: 'No worries, let us try again soon.' };
             case routine_checkin_status_enum_1.RoutineCheckinStatus.POSTPONED:
+                return { mood: 'sad', delta: -5, message: 'Okay, postponed for now. We will try again tomorrow.' };
             default:
-                return { mood: 'normal', delta: -1, message: 'Okay, postponed for later.' };
+                return { mood: 'sad', delta: -5, message: 'No worries, let us try again soon.' };
         }
     }
 };
@@ -92,6 +96,7 @@ __decorate([
 ], RoutineCheckinsController.prototype, "create", null);
 exports.RoutineCheckinsController = RoutineCheckinsController = __decorate([
     (0, common_1.Controller)('routine-checkins'),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        device_state_service_1.DeviceStateService])
 ], RoutineCheckinsController);
 //# sourceMappingURL=routine-checkins.controller.js.map

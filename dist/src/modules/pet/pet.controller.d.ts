@@ -4,13 +4,13 @@ export declare class PetController {
     constructor(prisma: PrismaService);
     status(): Promise<{
         pet: {
-            id: string;
             name: string;
-            mood: string;
-            happiness: number;
+            id: string;
             userId: string;
             createdAt: Date;
             updatedAt: Date;
+            mood: string;
+            happiness: number;
         } | null;
     }>;
 }

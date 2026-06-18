@@ -1,9 +1,13 @@
 import { Controller, Get } from '@nestjs/common';
+import { DeviceStateService } from '../device/device-state.service';
 import { PrismaService } from '../../prisma.service';
 
 @Controller('routines')
 export class RoutinesController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly deviceStateService: DeviceStateService,
+  ) {}
 
   @Get()
   async findAll() {
@@ -17,10 +21,7 @@ export class RoutinesController {
   async current() {
     const startedAt = Date.now();
     console.log('[routines] GET /routines/current enter');
-    const routine = await this.prisma.routine.findFirst({
-      where: { userId: 'user_fixed_001' },
-      orderBy: { createdAt: 'asc' },
-    });
+    const routine = await this.deviceStateService.getCurrentDueRoutine();
 
     console.log(
       `[routines] GET /routines/current exit found=${Boolean(routine)} ${Date.now() - startedAt}ms`,
