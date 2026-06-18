@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Pet, Routine } from '@prisma/client';
+import { Pet, Prisma, Routine } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 
 const FIXED_USER_ID = 'user_fixed_001';
+const DEVICE_TIME_ZONE = 'America/Fortaleza';
 
 type DeviceRoutinePayload = {
   id: string;
@@ -39,12 +40,61 @@ type EvaluatedRoutine = {
   checkedToday: boolean;
 };
 
+type ZonedDateParts = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+};
+
 @Injectable()
 export class DeviceStateService {
+  private readonly zonedDateFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: DEVICE_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+
   constructor(private readonly prisma: PrismaService) {}
 
   async getDeviceState(now: Date = new Date()): Promise<DeviceStatePayload> {
-    const [pet, routines, checkinsToday] = await Promise.all([
+    const [pet, routines, checkinsToday] = await this.fetchDeviceStateSnapshot(now);
+
+    if (!pet) {
+      throw new BadRequestException('Pet not found. Run seed first.');
+    }
+
+    return this.buildDeviceState(pet, routines, checkinsToday.map((checkin) => checkin.routineId), now);
+  }
+
+  async getCurrentDueRoutine(now: Date = new Date()): Promise<DeviceRoutinePayload | null> {
+    const state = await this.getDeviceState(now);
+    return state.dueNow ? state.routine : null;
+  }
+
+  private async fetchDeviceStateSnapshot(now: Date) {
+    try {
+      return await this.runDeviceStateQueries(now);
+    } catch (error) {
+      if (!this.isRetryablePrismaConnectionError(error)) {
+        throw error;
+      }
+
+      await this.prisma.$disconnect();
+      await this.prisma.$connect();
+      return this.runDeviceStateQueries(now);
+    }
+  }
+
+  private runDeviceStateQueries(now: Date) {
+    return Promise.all([
       this.prisma.pet.findFirst({ where: { userId: FIXED_USER_ID } }),
       this.prisma.routine.findMany({
         where: { userId: FIXED_USER_ID, isActive: true },
@@ -61,17 +111,10 @@ export class DeviceStateService {
         select: { routineId: true },
       }),
     ]);
-
-    if (!pet) {
-      throw new BadRequestException('Pet not found. Run seed first.');
-    }
-
-    return this.buildDeviceState(pet, routines, checkinsToday.map((checkin) => checkin.routineId), now);
   }
 
-  async getCurrentDueRoutine(now: Date = new Date()): Promise<DeviceRoutinePayload | null> {
-    const state = await this.getDeviceState(now);
-    return state.dueNow ? state.routine : null;
+  private isRetryablePrismaConnectionError(error: unknown): boolean {
+    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P1017';
   }
 
   private buildDeviceState(
@@ -131,21 +174,60 @@ export class DeviceStateService {
     const [hoursText, minutesText] = scheduledTime.split(':');
     const hours = Number(hoursText);
     const minutes = Number(minutesText);
-    const date = new Date(reference);
-    date.setHours(Number.isFinite(hours) ? hours : 0, Number.isFinite(minutes) ? minutes : 0, 0, 0);
-    return date;
+
+    const parts = this.getZonedDateParts(reference);
+    return this.zonedTimeToUtcDate(
+      parts.year,
+      parts.month,
+      parts.day,
+      Number.isFinite(hours) ? hours : 0,
+      Number.isFinite(minutes) ? minutes : 0,
+      0,
+    );
   }
 
   private startOfDay(reference: Date): Date {
-    const date = new Date(reference);
-    date.setHours(0, 0, 0, 0);
-    return date;
+    const parts = this.getZonedDateParts(reference);
+    return this.zonedTimeToUtcDate(parts.year, parts.month, parts.day, 0, 0, 0);
   }
 
   private startOfNextDay(reference: Date): Date {
-    const date = this.startOfDay(reference);
-    date.setDate(date.getDate() + 1);
-    return date;
+    const parts = this.getZonedDateParts(reference);
+    return this.zonedTimeToUtcDate(parts.year, parts.month, parts.day + 1, 0, 0, 0);
+  }
+
+  private getZonedDateParts(date: Date): ZonedDateParts {
+    const rawParts = this.zonedDateFormatter.formatToParts(date);
+    const parts = new Map(rawParts.map((part) => [part.type, part.value]));
+
+    return {
+      year: Number(parts.get('year') ?? '0'),
+      month: Number(parts.get('month') ?? '1'),
+      day: Number(parts.get('day') ?? '1'),
+      hour: Number(parts.get('hour') ?? '0'),
+      minute: Number(parts.get('minute') ?? '0'),
+      second: Number(parts.get('second') ?? '0'),
+    };
+  }
+
+  private zonedTimeToUtcDate(
+    year: number,
+    month: number,
+    day: number,
+    hour: number,
+    minute: number,
+    second: number,
+  ): Date {
+    const utcGuess = Date.UTC(year, month - 1, day, hour, minute, second, 0);
+    const firstPass = new Date(utcGuess - this.getTimeZoneOffsetMs(new Date(utcGuess)));
+    const correctedOffset = this.getTimeZoneOffsetMs(firstPass);
+    return new Date(utcGuess - correctedOffset);
+  }
+
+  private getTimeZoneOffsetMs(reference: Date): number {
+    const parts = this.getZonedDateParts(reference);
+    const wallClockAsUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second, 0);
+    return wallClockAsUtc - reference.getTime();
   }
 
   private toRoutinePayload(routine: Routine): DeviceRoutinePayload {

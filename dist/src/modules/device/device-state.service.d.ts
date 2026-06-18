@@ -26,14 +26,21 @@ export type DeviceStatePayload = {
 };
 export declare class DeviceStateService {
     private readonly prisma;
+    private readonly zonedDateFormatter;
     constructor(prisma: PrismaService);
     getDeviceState(now?: Date): Promise<DeviceStatePayload>;
     getCurrentDueRoutine(now?: Date): Promise<DeviceRoutinePayload | null>;
+    private fetchDeviceStateSnapshot;
+    private runDeviceStateQueries;
+    private isRetryablePrismaConnectionError;
     private buildDeviceState;
     private evaluateRoutine;
     private resolveScheduledDate;
     private startOfDay;
     private startOfNextDay;
+    private getZonedDateParts;
+    private zonedTimeToUtcDate;
+    private getTimeZoneOffsetMs;
     private toRoutinePayload;
     private toPetPayload;
 }

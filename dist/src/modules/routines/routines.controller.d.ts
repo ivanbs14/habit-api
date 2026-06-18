@@ -5,8 +5,8 @@ export declare class RoutinesController {
     private readonly deviceStateService;
     constructor(prisma: PrismaService, deviceStateService: DeviceStateService);
     findAll(): Promise<{
-        name: string;
         id: string;
+        name: string;
         description: string;
         question: string;
         scheduledTime: string;
