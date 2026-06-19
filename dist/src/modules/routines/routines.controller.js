@@ -45,6 +45,29 @@ let RoutinesController = class RoutinesController {
             message: 'Routine created.',
         };
     }
+    async remove(id) {
+        const routine = await this.prisma.routine.findFirst({
+            where: {
+                id,
+                userId: 'user_fixed_001',
+            },
+        });
+        if (!routine) {
+            throw new common_1.NotFoundException('Routine not found.');
+        }
+        await this.prisma.$transaction([
+            this.prisma.routineCheckin.deleteMany({
+                where: { routineId: routine.id },
+            }),
+            this.prisma.routine.delete({
+                where: { id: routine.id },
+            }),
+        ]);
+        return {
+            deletedRoutineId: routine.id,
+            message: 'Routine deleted.',
+        };
+    }
     async current() {
         const startedAt = Date.now();
         console.log('[routines] GET /routines/current enter');
@@ -70,6 +93,13 @@ __decorate([
     __metadata("design:paramtypes", [create_routine_dto_1.CreateRoutineDto]),
     __metadata("design:returntype", Promise)
 ], RoutinesController.prototype, "create", null);
+__decorate([
+    (0, common_1.Delete)(':id'),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], RoutinesController.prototype, "remove", null);
 __decorate([
     (0, common_1.Get)('current'),
     __metadata("design:type", Function),

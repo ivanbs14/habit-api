@@ -32,6 +32,10 @@ export declare class RoutinesController {
         };
         message: string;
     }>;
+    remove(id: string): Promise<{
+        deletedRoutineId: string;
+        message: string;
+    }>;
     current(): Promise<{
         routine: {
             id: string;

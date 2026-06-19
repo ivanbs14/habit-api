@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+} from '@nestjs/common';
 import { DeviceStateService } from '../device/device-state.service';
 import { PrismaService } from '../../prisma.service';
 import { CreateRoutineDto } from './create-routine.dto';
@@ -35,6 +43,34 @@ export class RoutinesController {
     return {
       routine,
       message: 'Routine created.',
+    };
+  }
+
+  @Delete(':id')
+  async remove(@Param('id') id: string) {
+    const routine = await this.prisma.routine.findFirst({
+      where: {
+        id,
+        userId: 'user_fixed_001',
+      },
+    });
+
+    if (!routine) {
+      throw new NotFoundException('Routine not found.');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.routineCheckin.deleteMany({
+        where: { routineId: routine.id },
+      }),
+      this.prisma.routine.delete({
+        where: { id: routine.id },
+      }),
+    ]);
+
+    return {
+      deletedRoutineId: routine.id,
+      message: 'Routine deleted.',
     };
   }
 
