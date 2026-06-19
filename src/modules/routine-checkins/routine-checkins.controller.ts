@@ -13,9 +13,17 @@ export class RoutineCheckinsController {
 
   @Post()
   async create(@Body() body: CreateRoutineCheckinDto) {
+    const now = new Date();
+
+    await this.deviceStateService.cancelExpiredRoutineCheckins(now);
+
     const routine = await this.prisma.routine.findUnique({ where: { id: body.routineId } });
     if (!routine) {
       throw new BadRequestException('Routine not found.');
+    }
+
+    if (await this.deviceStateService.isRoutineResponseExpired(routine, now)) {
+      throw new BadRequestException('Routine response window expired. Routine was canceled.');
     }
 
     const pet = await this.prisma.pet.findFirst({ where: { userId: 'user_fixed_001' } });
@@ -56,7 +64,7 @@ export class RoutineCheckinsController {
       },
     });
 
-    const deviceState = await this.deviceStateService.getDeviceState();
+    const deviceState = await this.deviceStateService.getDeviceState(now);
 
     return {
       checkin,

@@ -13,11 +13,13 @@ exports.DeviceStateService = void 0;
 const common_1 = require("@nestjs/common");
 const client_1 = require("@prisma/client");
 const prisma_service_1 = require("../../prisma.service");
+const routine_checkin_constants_1 = require("../routine-checkins/routine-checkin.constants");
 const FIXED_USER_ID = 'user_fixed_001';
 const DEVICE_TIME_ZONE = 'America/Fortaleza';
 let DeviceStateService = class DeviceStateService {
     constructor(prisma) {
         this.prisma = prisma;
+        this.routineResponseWindowMs = routine_checkin_constants_1.ROUTINE_RESPONSE_WINDOW_MS;
         this.zonedDateFormatter = new Intl.DateTimeFormat('en-CA', {
             timeZone: DEVICE_TIME_ZONE,
             year: 'numeric',
@@ -30,6 +32,7 @@ let DeviceStateService = class DeviceStateService {
         });
     }
     async getDeviceState(now = new Date()) {
+        await this.cancelExpiredRoutineCheckins(now);
         const [pet, routines, checkinsToday] = await this.fetchDeviceStateSnapshot(now);
         if (!pet) {
             throw new common_1.BadRequestException('Pet not found. Run seed first.');
@@ -39,6 +42,55 @@ let DeviceStateService = class DeviceStateService {
     async getCurrentDueRoutine(now = new Date()) {
         const state = await this.getDeviceState(now);
         return state.dueNow ? state.routine : null;
+    }
+    async cancelExpiredRoutineCheckins(now = new Date()) {
+        const [routines, checkinsToday] = await Promise.all([
+            this.prisma.routine.findMany({
+                where: { userId: FIXED_USER_ID, isActive: true },
+                orderBy: { createdAt: 'asc' },
+            }),
+            this.prisma.routineCheckin.findMany({
+                where: {
+                    userId: FIXED_USER_ID,
+                    createdAt: {
+                        gte: this.startOfDay(now),
+                        lt: this.startOfNextDay(now),
+                    },
+                },
+                select: { routineId: true },
+            }),
+        ]);
+        const checkedSet = new Set(checkinsToday.map((checkin) => checkin.routineId));
+        const expiredRoutines = routines.filter((routine) => this.isRoutineExpired(routine, checkedSet, now));
+        if (expiredRoutines.length === 0) {
+            return;
+        }
+        await this.prisma.routineCheckin.createMany({
+            data: expiredRoutines.map((routine) => ({
+                routineId: routine.id,
+                userId: FIXED_USER_ID,
+                status: routine_checkin_constants_1.AUTOMATIC_ROUTINE_CANCEL_STATUS,
+            })),
+        });
+    }
+    async isRoutineResponseExpired(routine, now = new Date()) {
+        const expiresAt = this.getRoutineResponseDeadline(routine, now);
+        if (expiresAt.getTime() > now.getTime()) {
+            return false;
+        }
+        const existingCheckin = await this.prisma.routineCheckin.findFirst({
+            where: {
+                userId: FIXED_USER_ID,
+                routineId: routine.id,
+                createdAt: {
+                    gte: this.startOfDay(now),
+                    lt: this.startOfNextDay(now),
+                },
+            },
+            orderBy: { createdAt: 'desc' },
+            select: { status: true },
+        });
+        return !existingCheckin || existingCheckin.status === routine_checkin_constants_1.AUTOMATIC_ROUTINE_CANCEL_STATUS;
     }
     async fetchDeviceStateSnapshot(now) {
         try {
@@ -115,6 +167,16 @@ let DeviceStateService = class DeviceStateService {
             nextAt,
             checkedToday,
         };
+    }
+    isRoutineExpired(routine, checkedSet, now) {
+        if (checkedSet.has(routine.id)) {
+            return false;
+        }
+        return this.getRoutineResponseDeadline(routine, now).getTime() <= now.getTime();
+    }
+    getRoutineResponseDeadline(routine, now) {
+        const dueAt = this.resolveScheduledDate(now, routine.scheduledTime);
+        return new Date(dueAt.getTime() + this.routineResponseWindowMs);
     }
     resolveScheduledDate(reference, scheduledTime) {
         const [hoursText, minutesText] = scheduledTime.split(':');

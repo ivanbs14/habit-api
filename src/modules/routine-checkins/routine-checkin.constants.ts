@@ -1,0 +1,2 @@
+export const AUTOMATIC_ROUTINE_CANCEL_STATUS = 'cancel';
+export const ROUTINE_RESPONSE_WINDOW_MS = 60 * 60 * 1000;

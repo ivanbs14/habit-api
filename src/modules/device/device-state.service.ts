@@ -1,6 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Pet, Prisma, Routine } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
+import {
+  AUTOMATIC_ROUTINE_CANCEL_STATUS,
+  ROUTINE_RESPONSE_WINDOW_MS,
+} from '../routine-checkins/routine-checkin.constants';
 
 const FIXED_USER_ID = 'user_fixed_001';
 const DEVICE_TIME_ZONE = 'America/Fortaleza';
@@ -51,6 +55,7 @@ type ZonedDateParts = {
 
 @Injectable()
 export class DeviceStateService {
+  private readonly routineResponseWindowMs = ROUTINE_RESPONSE_WINDOW_MS;
   private readonly zonedDateFormatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: DEVICE_TIME_ZONE,
     year: 'numeric',
@@ -65,6 +70,8 @@ export class DeviceStateService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getDeviceState(now: Date = new Date()): Promise<DeviceStatePayload> {
+    await this.cancelExpiredRoutineCheckins(now);
+
     const [pet, routines, checkinsToday] = await this.fetchDeviceStateSnapshot(now);
 
     if (!pet) {
@@ -77,6 +84,62 @@ export class DeviceStateService {
   async getCurrentDueRoutine(now: Date = new Date()): Promise<DeviceRoutinePayload | null> {
     const state = await this.getDeviceState(now);
     return state.dueNow ? state.routine : null;
+  }
+
+  async cancelExpiredRoutineCheckins(now: Date = new Date()): Promise<void> {
+    const [routines, checkinsToday] = await Promise.all([
+      this.prisma.routine.findMany({
+        where: { userId: FIXED_USER_ID, isActive: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.routineCheckin.findMany({
+        where: {
+          userId: FIXED_USER_ID,
+          createdAt: {
+            gte: this.startOfDay(now),
+            lt: this.startOfNextDay(now),
+          },
+        },
+        select: { routineId: true },
+      }),
+    ]);
+
+    const checkedSet = new Set(checkinsToday.map((checkin) => checkin.routineId));
+    const expiredRoutines = routines.filter((routine) => this.isRoutineExpired(routine, checkedSet, now));
+
+    if (expiredRoutines.length === 0) {
+      return;
+    }
+
+    await this.prisma.routineCheckin.createMany({
+      data: expiredRoutines.map((routine) => ({
+        routineId: routine.id,
+        userId: FIXED_USER_ID,
+        status: AUTOMATIC_ROUTINE_CANCEL_STATUS,
+      })),
+    });
+  }
+
+  async isRoutineResponseExpired(routine: Routine, now: Date = new Date()): Promise<boolean> {
+    const expiresAt = this.getRoutineResponseDeadline(routine, now);
+    if (expiresAt.getTime() > now.getTime()) {
+      return false;
+    }
+
+    const existingCheckin = await this.prisma.routineCheckin.findFirst({
+      where: {
+        userId: FIXED_USER_ID,
+        routineId: routine.id,
+        createdAt: {
+          gte: this.startOfDay(now),
+          lt: this.startOfNextDay(now),
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { status: true },
+    });
+
+    return !existingCheckin || existingCheckin.status === AUTOMATIC_ROUTINE_CANCEL_STATUS;
   }
 
   private async fetchDeviceStateSnapshot(now: Date) {
@@ -168,6 +231,19 @@ export class DeviceStateService {
       nextAt,
       checkedToday,
     };
+  }
+
+  private isRoutineExpired(routine: Routine, checkedSet: Set<string>, now: Date): boolean {
+    if (checkedSet.has(routine.id)) {
+      return false;
+    }
+
+    return this.getRoutineResponseDeadline(routine, now).getTime() <= now.getTime();
+  }
+
+  private getRoutineResponseDeadline(routine: Routine, now: Date): Date {
+    const dueAt = this.resolveScheduledDate(now, routine.scheduledTime);
+    return new Date(dueAt.getTime() + this.routineResponseWindowMs);
   }
 
   private resolveScheduledDate(reference: Date, scheduledTime: string): Date {
