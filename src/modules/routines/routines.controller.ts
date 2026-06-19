@@ -1,6 +1,7 @@
-import { Controller, Get } from '@nestjs/common';
+import { Body, Controller, Get, Post } from '@nestjs/common';
 import { DeviceStateService } from '../device/device-state.service';
 import { PrismaService } from '../../prisma.service';
+import { CreateRoutineDto } from './create-routine.dto';
 
 @Controller('routines')
 export class RoutinesController {
@@ -15,6 +16,26 @@ export class RoutinesController {
       where: { userId: 'user_fixed_001' },
       orderBy: { createdAt: 'asc' },
     });
+  }
+
+  @Post()
+  async create(@Body() body: CreateRoutineDto) {
+    const routine = await this.prisma.routine.create({
+      data: {
+        name: body.name,
+        description: body.description,
+        question: body.question,
+        scheduledTime: body.scheduledTime,
+        frequency: body.frequency,
+        isActive: body.isActive,
+        userId: 'user_fixed_001',
+      },
+    });
+
+    return {
+      routine,
+      message: 'Routine created.',
+    };
   }
 
   @Get('current')
